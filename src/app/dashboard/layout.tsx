@@ -7,10 +7,7 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="flex min-h-screen">
-      {/* Sidebar khusus dashboard */}
       <Sidebar />
-
-      {/* Konten dashboard */}
       <main className="flex-1 p-6 bg-gray-100">{children}</main>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircleIcon } from "@heroicons/react/24/solid";
+import Swal from "sweetalert2";
 
 export default function TambahKamar() {
   const router = useRouter();
@@ -11,41 +11,58 @@ export default function TambahKamar() {
   const [fasilitas, setFasilitas] = useState("");
   const [deskripsi, setDeskripsi] = useState("");
   const [price, setPrice] = useState("");
-  const [showPopup, setShowPopup] = useState(false);
+  const [image, setImage] = useState<File | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!image) {
+      Swal.fire("Peringatan!", "Silahkan upload gambar!", "warning");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("fasilitas", fasilitas);
+    formData.append("deskripsi", deskripsi);
+    formData.append("price", price);
+    formData.append("image", image);
+
     try {
       const res = await fetch("/api/rooms", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          fasilitas,
-          deskripsi,
-          price: Number(price),
-        }),
+        body: formData,
       });
 
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        data = { message: "Tidak ada response JSON dari server" };
+      }
 
       if (res.ok) {
-        setShowPopup(true);
+        Swal.fire({
+          title: "Berhasil!",
+          text: "Kamar berhasil ditambahkan.",
+          icon: "success",
+          confirmButtonColor: "#3085d6",
+          confirmButtonText: "OK",
+        }).then(() => {
+          router.push("/dashboard/rooms");
+        });
+
         setName("");
         setFasilitas("");
         setDeskripsi("");
         setPrice("");
-
-        setTimeout(() => {
-          router.push("/dashboard/rooms");
-        }, 2000);
+        setImage(null);
       } else {
-        alert(data.message || "Terjadi kesalahan");
+        Swal.fire("Gagal!", data.message || "Terjadi kesalahan.", "error");
       }
     } catch (error) {
       console.error(error);
-      alert("Terjadi kesalahan saat menambahkan kamar");
+      Swal.fire("Error!", "Terjadi kesalahan saat menambahkan kamar.", "error");
     }
   };
 
@@ -53,24 +70,13 @@ export default function TambahKamar() {
     <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded shadow relative">
       <h1 className="text-2xl font-bold mb-4">Tambah Kamar Baru</h1>
 
-      {showPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 flex flex-col items-center space-y-4 w-96">
-            <CheckCircleIcon className="h-16 w-16 text-green-500" />
-            <h2 className="text-xl font-bold text-green-700 text-center">
-              Kamar berhasil ditambahkan!
-            </h2>
-          </div>
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block mb-1 font-medium">Nama Kamar</label>
           <input
             type="text"
             value={name}
-            onChange={e => setName(e.target.value)}
+            onChange={(e) => setName(e.target.value)}
             className="w-full border p-2 rounded"
             required
           />
@@ -81,7 +87,7 @@ export default function TambahKamar() {
           <input
             type="text"
             value={fasilitas}
-            onChange={e => setFasilitas(e.target.value)}
+            onChange={(e) => setFasilitas(e.target.value)}
             className="w-full border p-2 rounded"
           />
         </div>
@@ -90,7 +96,7 @@ export default function TambahKamar() {
           <label className="block mb-1 font-medium">Keterangan</label>
           <textarea
             value={deskripsi}
-            onChange={e => setDeskripsi(e.target.value)}
+            onChange={(e) => setDeskripsi(e.target.value)}
             className="w-full border p-2 rounded"
           />
         </div>
@@ -100,10 +106,28 @@ export default function TambahKamar() {
           <input
             type="number"
             value={price}
-            onChange={e => setPrice(e.target.value)}
+            onChange={(e) => setPrice(e.target.value)}
             className="w-full border p-2 rounded"
             required
           />
+        </div>
+
+        <div>
+          <label className="block mb-1 font-medium">Upload Gambar</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setImage(e.target.files ? e.target.files[0] : null)}
+            className="w-full"
+            required
+          />
+          {image && (
+            <img
+              src={URL.createObjectURL(image)}
+              alt="Preview"
+              className="mt-2 h-32 object-cover rounded"
+            />
+          )}
         </div>
 
         <button

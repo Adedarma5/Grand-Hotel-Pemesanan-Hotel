@@ -1,6 +1,13 @@
 import { db } from "@/lib/db";
 import { NextResponse } from "next/server";
+import path from "path";
+import fs from "fs";
 
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   try {
@@ -18,11 +25,40 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
-    const { name, fasilitas, deskripsi, price } = await req.json();
+    const formData = await req.formData();
+
+    const name = formData.get("name")?.toString();
+    const fasilitas = formData.get("fasilitas")?.toString() || "";
+    const deskripsi = formData.get("deskripsi")?.toString() || "";
+    const price = formData.get("price")?.toString();
+    const imageFile = formData.get("image") as File | null;
+
+
+    if (!name || !price) {
+      return NextResponse.json({ message: "Name dan price wajib diisi" }, { status: 400 });
+    }
+
+    let imagePath = null;
+
+    if (imageFile && imageFile.size > 0) {
+      const uploadDir = path.join(process.cwd(), "public/uploads");
+      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+      const buffer = Buffer.from(await imageFile.arrayBuffer());
+      const filename = `${Date.now()}-${imageFile.name}`;
+      const filePath = path.join(uploadDir, filename);
+      fs.writeFileSync(filePath, buffer);
+      imagePath = `/uploads/${filename}`;
+    } else {
+      const [rows]: any = await db.query("SELECT image FROM rooms WHERE id = ?", [params.id]);
+      imagePath = rows[0]?.image || null;
+    }
+
     await db.query(
-      "UPDATE rooms SET name=?, facilities=?, description=?, price=? WHERE id=?",
-      [name, fasilitas, deskripsi, price, params.id]
+      "UPDATE rooms SET name=?, fasilitas=?, deskripsi=?, price=?, image=? WHERE id=?",
+      [name, fasilitas, deskripsi, price, imagePath, params.id]
     );
+
     return NextResponse.json({ message: "Room updated" });
   } catch (error) {
     console.error(error);
