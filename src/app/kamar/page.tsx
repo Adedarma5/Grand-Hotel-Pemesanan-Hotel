@@ -16,6 +16,12 @@ type Room = {
   fasilitas: string;
 };
 
+declare global {
+  interface Window {
+    snap: any;
+  }
+}
+
 function BookingModal({ room, onClose }: { room: Room; onClose: () => void }) {
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(price);
@@ -25,7 +31,16 @@ function BookingModal({ room, onClose }: { room: Room; onClose: () => void }) {
   const [checkOut, setCheckOut] = useState(new Date(Date.now() + 172800000).toISOString().split("T")[0]);
   const [totalPrice, setTotalPrice] = useState(room.price);
 
-  // Hitung harga otomatis
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://app.sandbox.midtrans.com/snap/snap.js";
+    script.setAttribute("data-client-key",  process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY!);
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
   useEffect(() => {
     const inDate = new Date(checkIn);
     const outDate = new Date(checkOut);
@@ -48,7 +63,7 @@ function BookingModal({ room, onClose }: { room: Room; onClose: () => void }) {
       email: formData.get("email"),
       phone: formData.get("phone"),
       note: formData.get("note"),
-      price: totalPrice, // kirim totalPrice ke backend
+      price: totalPrice,
     };
 
     try {
@@ -58,37 +73,57 @@ function BookingModal({ room, onClose }: { room: Room; onClose: () => void }) {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (data.success) {
-        Swal.fire({
-          icon: "success",
-          title: "Booking berhasil!",
-          text: `Terima kasih, kamar Anda telah dipesan.\nTotal Harga: ${formatPrice(totalPrice)}`,
-          confirmButtonColor: "#f59e0b",
-        });
-        onClose();
-      } else {
-        Swal.fire({
-          icon: "error",
-          title: "Booking gagal",
-          text: data.message || "Silakan coba lagi.",
-          confirmButtonColor: "#f59e0b",
-        });
+
+      if (!data.success) {
+        Swal.fire("Booking gagal", data.message || "Silakan coba lagi.", "error");
+        setLoading(false);
+        return;
       }
+
+      const snapTokenRes = await fetch("/api/payment-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: `BOOK-${Date.now()}`,
+          grossAmount: totalPrice,
+        }),
+      });
+
+      const snapTokenData = await snapTokenRes.json();
+
+      if (!snapTokenData.token) {
+        Swal.fire("Error", "Gagal generate token pembayaran.", "error");
+        setLoading(false);
+        return;
+      }
+
+      window.snap.pay(snapTokenData.token, {
+        onSuccess: (result: any) => {
+          Swal.fire("Pembayaran sukses!", "Booking Anda berhasil.", "success").then(() => {
+            window.location.href = "/"; 
+          });
+        },
+        onPending: (result: any) => {
+          Swal.fire("Pembayaran pending!", "Silakan selesaikan pembayaran.", "info").then(() => {
+            window.location.href = "/"; 
+          });
+        },
+        onError: (result: any) => {
+          Swal.fire("Pembayaran gagal!", "Silakan coba lagi.", "error");
+        },
+        onClose: () => {
+          Swal.fire("Popup ditutup tanpa membayar", "", "warning");
+        },
+      });
+
+      onClose();
     } catch (err) {
       console.error(err);
-      Swal.fire({
-        icon: "error",
-        title: "Kesalahan jaringan",
-        text: "Terjadi kesalahan. Silakan coba lagi.",
-        confirmButtonColor: "#f59e0b",
-      });
+      Swal.fire("Kesalahan jaringan", "Terjadi kesalahan. Silakan coba lagi.", "error");
     } finally {
       setLoading(false);
     }
-  }
-
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
-  const dayAfter = new Date(Date.now() + 172800000).toISOString().split("T")[0];
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -109,13 +144,14 @@ function BookingModal({ room, onClose }: { room: Room; onClose: () => void }) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Check-in</label>
-                <input type="date" name="checkin" onChange={e => setCheckIn(e.target.value)}  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" required />
+                <input type="date" name="checkin" onChange={e => setCheckIn(e.target.value)} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" required />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Check-out</label>
-                <input type="date" name="checkout" onChange={e => setCheckOut(e.target.value)}  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" required />
+                <input type="date" name="checkout" onChange={e => setCheckOut(e.target.value)} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" required />
               </div>
             </div>
+
             <p className="text-lg font-semibold text-amber-600">Total Harga: {formatPrice(totalPrice)}</p>
 
             <input type="text" name="fullName" placeholder="Nama Lengkap" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" required />
@@ -126,11 +162,10 @@ function BookingModal({ room, onClose }: { room: Room; onClose: () => void }) {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full bg-gradient-to-r from-amber-500 to-amber-600 text-white py-4 rounded-lg font-semibold text-lg shadow-lg hover:shadow-xl transition flex justify-center items-center ${loading ? "opacity-70 cursor-not-allowed" : ""
-                }`}
+              className={`w-full bg-gradient-to-r from-amber-500 to-amber-600 text-white py-4 rounded-lg font-semibold text-lg shadow-lg hover:shadow-xl transition flex justify-center items-center ${loading ? "opacity-70 cursor-not-allowed" : ""}`}
             >
               {loading ? <span className="animate-spin border-2 border-white border-t-transparent rounded-full w-5 h-5 mr-2"></span> : null}
-              {loading ? "Memproses..." : "Konfirmasi Pemesanan"}
+              {loading ? "Memproses..." : "Konfirmasi Pemesanan & Bayar"}
             </button>
           </form>
         </div>
