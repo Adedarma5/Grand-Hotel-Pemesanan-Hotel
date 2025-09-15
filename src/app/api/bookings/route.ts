@@ -1,11 +1,28 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
+import jwt from "jsonwebtoken";
 
-// GET: Ambil semua booking
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const [rows] = await db.query("SELECT * FROM bookings ORDER BY createdAt DESC");
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "default_secret");
+
+    let rows;
+    if (decoded.role === "admin") {
+      [rows] = await db.query("SELECT * FROM bookings ORDER BY createdAt DESC");
+    } else {
+      [rows] = await db.query(
+        "SELECT * FROM bookings WHERE id_pengguna = ? ORDER BY createdAt DESC",
+        [decoded.id]
+      );
+    }
+
     return NextResponse.json(rows);
   } catch (err) {
     console.error(err);
@@ -13,9 +30,17 @@ export async function GET() {
   }
 }
 
-// POST: Buat booking baru dengan perhitungan harga otomatis
+
 export async function POST(req: Request) {
   try {
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader) {
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "default_secret");
+
     const body = await req.json();
     const { roomId, roomName, checkIn, checkOut, fullName, email, phone, note } = body;
 
@@ -35,8 +60,21 @@ export async function POST(req: Request) {
     const totalPrice = nights * roomPrice;
 
     await db.query(
-      "INSERT INTO bookings (roomId, roomName, checkIn, checkOut, fullName, email, phone, note, price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [roomId, roomName, checkIn, checkOut, fullName, email, phone, note || "", totalPrice]
+      `INSERT INTO bookings 
+      (roomId, roomName, checkIn, checkOut, fullName, email, phone, note, price, id_pengguna) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        roomId,
+        roomName,
+        checkIn,
+        checkOut,
+        fullName,
+        email,
+        phone,
+        note || "",
+        totalPrice,
+        decoded.id
+      ]
     );
 
     const html = `

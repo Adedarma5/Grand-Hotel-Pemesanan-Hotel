@@ -6,18 +6,18 @@ export async function POST(req: Request) {
   try {
     const { name, email, password } = await req.json();
 
+
     const [rows]: any = await db.query("SELECT * FROM users WHERE email = ?", [email]);
     if (rows.length > 0) {
       return NextResponse.json({ message: "Email sudah terdaftar" }, { status: 400 });
     }
 
-
     const hashedPassword = await bcrypt.hash(password, 10);
 
 
     await db.query(
-      "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
-      [name, email, hashedPassword]
+      "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
+      [name, email, hashedPassword, "tamu"]
     );
 
     return NextResponse.json({ message: "Registrasi berhasil" }, { status: 201 });

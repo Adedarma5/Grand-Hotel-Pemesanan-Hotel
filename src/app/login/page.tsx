@@ -27,7 +27,13 @@ export default function LoginPage() {
             const data = await res.json();
 
             if (res.ok) {
-                router.push("/dashboard");
+                localStorage.setItem("token", data.token);
+
+                if (data.role === "admin") {
+                    router.push("/dashboard");
+                } else {
+                    router.push("/pesanan");
+                }
             } else {
                 setError(data.message || "Login gagal");
             }
@@ -48,8 +54,8 @@ export default function LoginPage() {
                         <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
                             <BuildingOfficeIcon className="w-8 h-8 text-white" />
                         </div>
-                        <h1 className="text-2xl font-bold text-gray-900 mb-2">Selamat Datang</h1>
-                        <p className="text-gray-600 text-sm">Masuk ke akun Grand Hotel Anda</p>
+                        <h1 className="text-2xl font-bold text-gray-900 mb-2"> Grand Hotel</h1>
+                        <p className="text-gray-600 text-sm">Selamat Datang </p>
                     </div>
 
                     {error && (
@@ -95,11 +101,10 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center space-x-2 transition-all duration-200 ease-in-out ${
-                                isLoading
-                                    ? "bg-gray-400 cursor-not-allowed"
-                                    : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg transform hover:-translate-y-0.5"
-                            }`}
+                            className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center space-x-2 transition-all duration-200 ease-in-out ${isLoading
+                                ? "bg-gray-400 cursor-not-allowed"
+                                : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg transform hover:-translate-y-0.5"
+                                }`}
                         >
                             {isLoading ? (
                                 <>

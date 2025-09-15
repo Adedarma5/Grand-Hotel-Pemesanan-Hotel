@@ -13,7 +13,8 @@ type Booking = {
     phone: string;
     status: string;
     note?: string;
-    price: string;
+    price: number;
+    payment_status: "success" | "pending";
 };
 
 export default function BookingSelesai() {
@@ -23,9 +24,23 @@ export default function BookingSelesai() {
 
     const fetchCompletedBookings = async () => {
         try {
-            const res = await fetch("/api/bookings");
-            const data: Booking[] = await res.json();
-            setCompletedBookings(data.filter(b => b.status === "checkout"));
+            const token = localStorage.getItem("token");
+            if (!token) {
+                Swal.fire("Unauthorized", "Silakan login terlebih dahulu", "warning");
+                return;
+            }
+
+            const res = await fetch("/api/bookings", {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            const data = await res.json();
+
+            const bookingsArray: Booking[] = Array.isArray(data) ? data : data.bookings || [];
+
+            setCompletedBookings(bookingsArray.filter(b => b.status === "checkout"));
         } catch (err) {
             console.error(err);
             Swal.fire("Error", "Gagal memuat data booking selesai", "error");
@@ -57,6 +72,7 @@ export default function BookingSelesai() {
                             <th className="px-4 py-2 text-left">Check-in</th>
                             <th className="px-4 py-2 text-left">Check-out</th>
                             <th className="px-4 py-2 text-left">Harga</th>
+                            <th className="px-4 py-2 text-left">Pembayaran</th>
                             <th className="px-4 py-2 text-left">Status</th>
                         </tr>
                     </thead>
@@ -70,16 +86,21 @@ export default function BookingSelesai() {
                                 <td className="px-4 py-2">{formatDate(b.checkOut)}</td>
                                 <td className="px-6 py-4">
                                     <span className="bg-green-300 px-3 py-2 rounded-full text-sm font-semibold">
-                                    {b.price
-                                        ? new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(Number(b.price))
-                                        : "Rp 0"}
-                                        </span>
+                                        {b.price
+                                            ? new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(Number(b.price))
+                                            : "Rp 0"}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-2 ">
+                                    <span className="bg-green-500  px-3 py-2 rounded-full text-sm font-semibold">{b.payment_status}
+                                    </span>
                                 </td>
                                 <td className="px-4 py-2">
                                     <span className="bg-red-500 text-white px-2 py-1 rounded-full text-sm">
                                         {b.status}
                                     </span>
                                 </td>
+
                             </tr>
                         ))}
                     </tbody>
@@ -94,10 +115,10 @@ export default function BookingSelesai() {
                 >
                     Prev
                 </button>
-                <span className="px-2 py-1">{currentPage} / {totalPages}</span>
+                <span className="px-2 py-1">{currentPage} / {totalPages || 1}</span>
                 <button
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
+                    disabled={currentPage === totalPages || totalPages === 0}
                     className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
                 >
                     Next
